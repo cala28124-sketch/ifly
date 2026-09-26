@@ -10,6 +10,12 @@ from laptop.viewer import show
 hub = imagezmq.ImageHub(open_port=f"tcp://*:{FRAME_PORT}")
 pub = zmq.Context().socket(zmq.PUB)
 pub.bind(f"tcp://*:{COMMAND_PORT}")
+def threat_side(seen, thought):
+    """-1 = threat on the image's left, +1 = right, 0 = both. Taken from which giant fiber (DNp01) fired
+    when the real brain runs, otherwise from the loom scores."""
+    left, right = thought.get("activity", {}).get("DNp01", (seen["loom_left"], seen["loom_right"]))
+    return 0.0 if left + right == 0 else (right - left) / (right + left)
+
 eyes, brain, chunk = FlyEyes(fake=FAKE_EYES, model=EYES_MODEL), FlyBrainModel(fake=FAKE_BRAIN), []
 
 while True:
@@ -23,6 +29,6 @@ while True:
     seen = eyes.step(chunk)
     chunk = []
     thought = brain.step(seen["loom_left"], seen["loom_right"])
-    pub.send_json({"turn": 0.0, "escape": thought["escape"]})
+    pub.send_json({"turn": threat_side(seen, thought), "escape": thought["escape"]})
     if show(frame, seen, thought):
         break
