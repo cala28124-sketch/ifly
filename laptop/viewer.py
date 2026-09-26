@@ -33,6 +33,8 @@ def circuit_panel(thought, height):
         cv2.putText(panel, "ESCAPE", (90, 320), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
     return panel
 
+brain_map = None   # created on first use, only when the real brain is running
+
 def show(frame, seen, thought):
     img = cv2.cvtColor(cv2.resize(frame, (640, 480)), cv2.COLOR_GRAY2BGR)
     cv2.putText(img, f"loom L {seen['loom_left']:.2f}  R {seen['loom_right']:.2f}",
@@ -41,4 +43,10 @@ def show(frame, seen, thought):
         cv2.putText(img, "WARN: " + " > ".join(thought["fired"]),
                     (10, 460), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
     cv2.imshow("fly brain", np.hstack([img, circuit_panel(thought, img.shape[0])]))
+    if "spiked" in thought:
+        global brain_map
+        if brain_map is None:
+            from laptop.brain_map import BrainMap
+            brain_map = BrainMap()
+        cv2.imshow("fly brain map", brain_map.draw(thought["spiked"]))
     return cv2.waitKey(1) == 27   # True when Esc is pressed

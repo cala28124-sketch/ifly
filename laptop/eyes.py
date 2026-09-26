@@ -1,3 +1,13 @@
+"""The fly eyes: turn camera frames into looming scores (loom_left, loom_right).
+
+Real mode runs flyvis, a connectome-constrained model of the fly optic lobe (~45,000 neurons, pretrained).
+Fly neurons read here (one of each in every one of the eye's 721 columns):
+  T4a, T4b, T4c, T4d - motion detectors for bright (ON) edges, e.g. a light object on a darker background
+  T5a, T5b, T5c, T5d - motion detectors for dark (OFF) edges, e.g. a dark car against a bright sky
+  Each subtype prefers one direction (in the fly: a = front-to-back, b = back-to-front, c = up, d = down);
+  their measured directions in the camera image are stored per model in tools/tuning/<model>.json.
+From these we build LPLC2-like looming units (LPLC2 itself is not in flyvis; the real ones are in the brain).
+"""
 import json
 import pathlib
 import numpy as np

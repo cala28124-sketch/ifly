@@ -1,3 +1,14 @@
+"""The fly brain: turns looming scores from the eyes into an escape decision.
+
+Real mode runs flybrain, the MaleCNS whole-brain spiking model (166,700 neurons, real connectome wiring).
+Fly neurons used here (all present in the connectome, on the left and right side):
+  LPLC2  - looming detectors (~90 per side): fire when motion spreads outward in all four directions,
+           i.e. something is coming straight at the fly. We drive them with loom_left / loom_right.
+  LC4    - looming-sensitive neurons tuned to fast approaches (~60-70 per side); also driven with the
+           loom scores. Both types connect, through the brain's own wiring, to:
+  DNp01  - the giant fiber (one per side): the descending "escape now" neuron that triggers the fly's
+           jump-and-fly-away reflex. Escape = it spikes at least ESCAPE_SPIKES times in a chunk.
+"""
 from config import CHUNK, WARN_THRESHOLD
 
 CAMERA_FPS = 30          # frames per second the chunks come from (sets brain time per chunk)
@@ -44,4 +55,4 @@ class FlyBrainModel:
                 activity[name]["LR".index(side)] += len(fired & cells)
         escape = giant_fiber_spikes >= ESCAPE_SPIKES
         return {"escape": escape, "fired": [name for name in CHAIN if spiked & self.chain[name]] if escape else [],
-                "activity": activity}
+                "activity": activity, "spiked": list(spiked)}   # spiked: every neuron that fired, for the brain map
