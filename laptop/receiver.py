@@ -2,7 +2,7 @@
 # Vehicle check (to be added): keep the decoded color image before the gray conversion below
 # and pass it to the detector.
 import cv2, zmq, imagezmq, numpy as np
-from config import FRAME_PORT, COMMAND_PORT, CHUNK, FAKE_EYES, EYES_MODEL, FAKE_BRAIN, FRAME_SIZE
+from config import FRAME_PORT, COMMAND_PORT, CHUNK, FAKE_EYES, EYES_MODEL, FAKE_BRAIN, FRAME_SIZE, EYES_ZOOM
 from laptop.eyes import FlyEyes
 from laptop.brain import FlyBrainModel
 from laptop.viewer import show
@@ -10,6 +10,12 @@ from laptop.viewer import show
 hub = imagezmq.ImageHub(open_port=f"tcp://*:{FRAME_PORT}")
 pub = zmq.Context().socket(zmq.PUB)
 pub.bind(f"tcp://*:{COMMAND_PORT}")
+def zoom_center(image, zoom):
+    """Keep the centre 1/zoom of the image (zoom 1 = unchanged)."""
+    h, w = image.shape[:2]
+    ch, cw = int(h / zoom), int(w / zoom)
+    return image[(h - ch) // 2:(h + ch) // 2, (w - cw) // 2:(w + cw) // 2]
+
 def threat_side(seen, thought):
     """-1 = threat on the image's left, +1 = right, 0 = both. Taken from which giant fiber (DNp01) fired
     when the real brain runs, otherwise from the loom scores."""
@@ -22,7 +28,7 @@ while True:
     _, jpg = hub.recv_jpg()
     hub.send_reply(b"OK")
     frame = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
-    frame = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), FRAME_SIZE)   # gray 160x120 for the eyes
+    frame = cv2.resize(zoom_center(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), EYES_ZOOM), FRAME_SIZE)   # gray 160x120 for the eyes
     chunk.append(frame)
     if len(chunk) < CHUNK:
         continue
