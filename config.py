@@ -6,5 +6,6 @@ CHUNK = 5                   # frames per eye-model step; smaller = less lag
 WARN_THRESHOLD = 0.6        # tune on webcam and Waymo clips
 FAKE_EYES = False           # True = frame-difference stand-in; False = flyvis fly eyes
 EYES_MODEL = "flow/0000/000"  # flyvis ensemble model; needs tools/tuning/<model>.json
+FAKE_BRAIN = False          # True = "loom > WARN_THRESHOLD" stand-in; False = flybrain whole-brain model
 WARN_HOLD = 0.5             # seconds the warning keeps beeping after the last escape command
 AUDIO_DEVICE = "plughw:CARD=G,DEV=0"  # Corsair USB headset on the Pi (aplay -l); None = system default
