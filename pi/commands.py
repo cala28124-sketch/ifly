@@ -47,10 +47,17 @@ alarm = threading.Event()   # set = beeping
 
 def beeper():
     """Background thread: beep over and over while the alarm is set."""
+    reported = False
     while True:
         alarm.wait()
         if play:
-            subprocess.run(play)
+            result = subprocess.run(play, stderr=subprocess.PIPE, text=True)
+            if result.returncode != 0:
+                if not reported:   # say it once, not on every beep
+                    print(f"audio failed: {result.stderr.strip()}\n"
+                          "  check the headset with  aplay -l  and set AUDIO_DEVICE in config.py")
+                    reported = True
+                time.sleep(BEEP_S)   # failed plays return instantly; keep the beep rhythm
         else:
             print("BEEP")
         time.sleep(GAP_S)
