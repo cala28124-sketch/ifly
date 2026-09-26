@@ -7,4 +7,4 @@ WARN_THRESHOLD = 0.6        # tune on webcam and Waymo clips
 FAKE_EYES = False           # True = frame-difference stand-in; False = flyvis fly eyes
 EYES_MODEL = "flow/0000/000"  # flyvis ensemble model; needs tools/tuning/<model>.json
 WARN_HOLD = 0.5             # seconds the warning keeps beeping after the last escape command
-AUDIO_DEVICE = None         # None = system default; or the headset, e.g. "plughw:CARD=Headset,DEV=0" (aplay -L)
+AUDIO_DEVICE = "plughw:CARD=G,DEV=0"  # Corsair USB headset on the Pi (aplay -l); None = system default
