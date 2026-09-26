@@ -4,7 +4,7 @@ COMMAND_PORT = 5556         # laptop -> Pi commands (pyzmq)
 FRAME_SIZE = (160, 120)       # grayscale size the fly eyes use (made on the laptop)
 COLOR_SIZE = (320, 240)       # color frame the Pi sends (bigger, for a later vehicle check)
 CHUNK = 5                   # frames per eye-model step; smaller = less lag
-WARN_THRESHOLD = 0.6        # tune on webcam and Waymo clips
+WARN_THRESHOLD = 0.4        # loom level where the fly escapes; 0.4 gave earlier warnings with no extra false alarms (synthetic test)
 FAKE_EYES = False           # True = frame-difference stand-in; False = flyvis fly eyes
 EYES_MODEL = "flow/0000/000"  # flyvis ensemble model; needs tools/tuning/<model>.json
 FAKE_BRAIN = False          # True = "loom > WARN_THRESHOLD" stand-in; False = flybrain whole-brain model
