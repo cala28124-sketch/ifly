@@ -4,3 +4,5 @@ COMMAND_PORT = 5556         # laptop -> Pi commands (pyzmq)
 FRAME_SIZE = (160, 120)
 CHUNK = 5                   # frames per eye-model step; smaller = less lag
 WARN_THRESHOLD = 0.6        # tune on webcam and Waymo clips
+FAKE_EYES = False           # True = frame-difference stand-in; False = flyvis fly eyes
+EYES_MODEL = "flow/0000/000"  # flyvis ensemble model; needs tools/tuning/<model>.json

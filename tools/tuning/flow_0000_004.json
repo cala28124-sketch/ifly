@@ -1,0 +1,50 @@
+{
+ "T4a": {
+  "flyvis_deg": 357.5,
+  "image_deg": 2.5,
+  "dsi": 0.025,
+  "strength": 0.0607
+ },
+ "T4b": {
+  "flyvis_deg": 178.3,
+  "image_deg": 181.7,
+  "dsi": 0.59,
+  "strength": 0.4957
+ },
+ "T4c": {
+  "flyvis_deg": 272.7,
+  "image_deg": 87.3,
+  "dsi": 0.551,
+  "strength": 0.4579
+ },
+ "T4d": {
+  "flyvis_deg": 95.4,
+  "image_deg": 264.6,
+  "dsi": 0.503,
+  "strength": 0.4089
+ },
+ "T5a": {
+  "flyvis_deg": 4.9,
+  "image_deg": 355.1,
+  "dsi": 0.003,
+  "strength": 0.0006
+ },
+ "T5b": {
+  "flyvis_deg": 319.4,
+  "image_deg": 40.6,
+  "dsi": 0.428,
+  "strength": 0.073
+ },
+ "T5c": {
+  "flyvis_deg": 226.9,
+  "image_deg": 133.1,
+  "dsi": 0.013,
+  "strength": 7.3849
+ },
+ "T5d": {
+  "flyvis_deg": 67.1,
+  "image_deg": 292.9,
+  "dsi": 0.081,
+  "strength": 0.0034
+ }
+}

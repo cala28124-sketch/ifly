@@ -1,1 +1,7 @@
 flyvis-env/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.claude/settings.local.json
+clips/
