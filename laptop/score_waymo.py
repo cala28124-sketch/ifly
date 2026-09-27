@@ -7,8 +7,9 @@ and Waymo's labels: waymo/lidar_box/SEGMENT.parquet (3D, preferred) or waymo/cam
 
 Ground truth: with 3D labels, each vehicle in the front camera's view that will reach the Waymo car
 within TTC_MAX s is sorted by where it is now (reliable; projecting sideways drift isn't, on curves):
-  collision course - in the car's path (overlapping it sideways): what the fly is built to catch, the main score
-  close pass       - within PASS_MARGIN m of its side: reported separately; the fly doesn't target these yet
+  collision course - clearly in the car's path (overlapping it by IN_PATH m): what the fly is built to catch,
+                     the main score
+  close pass       - otherwise within PASS_MARGIN m of its side: reported separately; not yet targeted
 Motion comes from each vehicle's position relative to the car over time. Without 3D labels, Davis's
 compute_ground_truth (a labeled 2D box growing fast, see GT_GROWTH) is used for everything; it also
 counts parked cars the Waymo car drives past. Consecutive threat frames form one event, which ends when
@@ -31,7 +32,9 @@ from laptop.waymo_player import VEHICLE_TYPE, compute_ground_truth, load_segment
 GT_GROWTH = 1.07
 # 3D ground truth (waymo/lidar_box): positions are metres from the Waymo car, x forward, y left
 TTC_MAX = 3.0        # a vehicle that would reach the car within this many seconds...
-PASS_MARGIN = 1.0    # ...and is within this many metres of its side is a close pass (in its path: collision)
+PASS_MARGIN = 1.0    # ...and is within this many metres of its side is a close pass...
+IN_PATH = 0.5        # ...or overlaps its path sideways by at least this many metres: collision course (a parked
+                     # car overlapping by a few cm only looks "in the path" because the widths are approximate)
 EGO_FRONT = 3.0      # metres from the label origin to the Waymo car's front (approximate)
 EGO_HALF_WIDTH = 1.0 # half the Waymo car's width, metres
 HALF_FOV = 25        # degrees each side of straight ahead that the front camera sees
@@ -66,9 +69,9 @@ def lidar_ground_truth(segment):
             if not in_view or gap <= 0 or -vx < MIN_CLOSING:
                 continue
             ttc = gap / -vx                                           # seconds until it reaches the car
-            side_gap = abs(y[i]) - width[i] / 2 - EGO_HALF_WIDTH      # sideways clearance (below 0 = in its path)
+            side_gap = abs(y[i]) - width[i] / 2 - EGO_HALF_WIDTH      # sideways clearance (below 0 = overlapping)
             if ttc <= TTC_MAX and side_gap <= PASS_MARGIN:
-                kinds["collision" if side_gap <= 0 else "close"].add(ts[i])
+                kinds["collision" if side_gap <= -IN_PATH else "close"].add(ts[i])
     frames = df["key.frame_timestamp_micros"].unique()
     return {kind: {ts: ts in found for ts in frames} for kind, found in kinds.items()}
 
