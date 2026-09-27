@@ -1,6 +1,7 @@
 """
-Reads Waymo v2 Parquet segments and yields frames in the same shape the
-webcam pipeline expects: 160x120 grayscale uint8 NumPy arrays.
+Reads Waymo v2 Parquet segments and yields frames in the same shape the Pi
+sends: COLOR_SIZE (320x240) color uint8 NumPy arrays, so they can go through the
+receiver's usual processing (gray + zoom for the eyes, color for the vehicle check).
  
 Also pulls matching camera_box ground truth so a later scoring script
 (laptop/score_waymo.py) can check "did we warn before the box grew fast".
@@ -10,7 +11,7 @@ import pandas as pd
 import numpy as np
 import cv2
  
-from config import FRAME_SIZE
+from config import COLOR_SIZE
  
 FRONT_CAMERA = 1  # Waymo's camera_name code for the front-facing camera
  
@@ -18,9 +19,9 @@ FRONT_CAMERA = 1  # Waymo's camera_name code for the front-facing camera
 def load_segment_frames(segment_id, camera_image_dir="waymo/camera_image"):
     """
     Yields (timestamp, frame) for the front camera of one segment,
-    frame already resized to FRAME_SIZE and grayscale.
+    frame already resized to COLOR_SIZE and in color (like the Pi's frames).
  
-    Waymo images are 3:2; FRAME_SIZE is likely 4:3 (e.g. 160x120). Resizing
+    Waymo images are 3:2; COLOR_SIZE is 4:3 (320x240). Resizing
     directly would squash the image and slightly distort how fast things
     appear to expand, which matters for a looming detector. So we center-crop
     to FRAME_SIZE's aspect ratio first, then resize -- same idea as "crop to
@@ -31,14 +32,14 @@ def load_segment_frames(segment_id, camera_image_dir="waymo/camera_image"):
         "key.frame_timestamp_micros"
     )
  
-    target_w, target_h = FRAME_SIZE
+    target_w, target_h = COLOR_SIZE
     target_ratio = target_w / target_h
  
     for _, row in front.iterrows():
         jpg_bytes = row["[CameraImageComponent].image"]
-        img = cv2.imdecode(np.frombuffer(jpg_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
+        img = cv2.imdecode(np.frombuffer(jpg_bytes, np.uint8), cv2.IMREAD_COLOR)
  
-        h, w = img.shape
+        h, w = img.shape[:2]
         current_ratio = w / h
         if current_ratio > target_ratio:
             # image is wider than target: crop the sides
@@ -51,7 +52,7 @@ def load_segment_frames(segment_id, camera_image_dir="waymo/camera_image"):
             y0 = (h - new_h) // 2
             img = img[y0:y0 + new_h, :]
  
-        frame = cv2.resize(img, FRAME_SIZE)
+        frame = cv2.resize(img, COLOR_SIZE)
         yield row["key.frame_timestamp_micros"], frame
  
  
