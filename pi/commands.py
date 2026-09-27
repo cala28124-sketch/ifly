@@ -1,8 +1,8 @@
-"""Runs on the Pi: listens for the laptop's warnings and beeps through the USB headset,
+"""Runs on the Pi: listens for the laptop's warnings and plays a fly's buzz through the USB headset,
 in the ear on the side the threat is on (both ears when it's in the middle).
 
 Run from the repo root:  python -m pi.commands          (listen to the laptop)
-                         python -m pi.commands --test   (beep left, right, then both, to check the headset)
+                         python -m pi.commands --test   (buzz left, right, then both, to check the headset)
 Uses aplay (built into Raspberry Pi OS); on a Mac it uses afplay, elsewhere it prints instead.
 """
 import array
@@ -18,18 +18,25 @@ import wave
 import zmq
 from config import LAPTOP_IP, COMMAND_PORT, WARN_HOLD, AUDIO_DEVICE, EAR_SIDE, SWAP_EARS
 
-BEEP_HZ, BEEP_S, GAP_S = 880, 0.2, 0.1   # pitch, beep length, silence between beeps
+BUZZ_HZ, BUZZ_S, GAP_S = 210, 0.4, 0.02   # wingbeat pitch (a fruit fly beats its wings ~200-220 times a
+                                          # second), length of one buzz, pause between buzzes
 
-def make_beep(ear):
-    """Write a short stereo sine-wave beep for one ear ("left", "right") or "both"; return its path."""
+def make_buzz(ear):
+    """Write a stereo fly buzz for one ear ("left", "right") or "both"; return its path. The buzz is the
+    wingbeat tone plus its overtones (the raspy texture), with its pitch and loudness wavering a little."""
     rate = 44100
-    n = int(rate * BEEP_S)
-    fade = int(rate * 0.005)   # 5 ms fade in/out so it doesn't click
-    tone = [int(12000 * min(1, i / fade, (n - i) / fade) * math.sin(2 * math.pi * BEEP_HZ * i / rate))
-            for i in range(n)]
+    n = int(rate * BUZZ_S)
+    fade = int(rate * 0.03)   # 30 ms fade in/out so it doesn't click
+    tone, phase = [], 0.0
+    for i in range(n):
+        t = i / rate
+        phase += 2 * math.pi * (BUZZ_HZ + 12 * math.sin(2 * math.pi * 7 * t) + 5 * math.sin(2 * math.pi * 13.3 * t)) / rate
+        shape = sum(math.sin(k * phase) / k for k in range(1, 9))         # buzzy, sawtooth-like
+        flutter = 0.8 + 0.2 * math.sin(2 * math.pi * 4.1 * t + 1)         # loudness waver
+        tone.append(int(9000 * min(1, i / fade, (n - i) / fade) * flutter * shape))
     left, right = ear in ("left", "both"), ear in ("right", "both")
     samples = array.array("h", (s for t in tone for s in (t * left, t * right)))   # interleaved L, R
-    path = pathlib.Path(tempfile.gettempdir()) / f"fly_beep_{ear}.wav"
+    path = pathlib.Path(tempfile.gettempdir()) / f"fly_buzz_{ear}.wav"
     with wave.open(str(path), "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)
@@ -38,17 +45,17 @@ def make_beep(ear):
     return path
 
 EARS = ("left", "right", "both")
-beeps = {ear: make_beep(ear) for ear in EARS}
+sounds = {ear: make_buzz(ear) for ear in EARS}
 if shutil.which("aplay"):
-    play = {ear: ["aplay", "-q"] + (["-D", AUDIO_DEVICE] if AUDIO_DEVICE else []) + [str(beeps[ear])] for ear in EARS}
+    play = {ear: ["aplay", "-q"] + (["-D", AUDIO_DEVICE] if AUDIO_DEVICE else []) + [str(sounds[ear])] for ear in EARS}
 elif shutil.which("afplay"):
-    play = {ear: ["afplay", str(beeps[ear])] for ear in EARS}
+    play = {ear: ["afplay", str(sounds[ear])] for ear in EARS}
 else:
     play = None
     print("no audio player found; printing instead")
 
-alarm = threading.Event()   # set = beeping
-ear = "both"                # which ear the beeps go to right now
+alarm = threading.Event()   # set = buzzing
+ear = "both"                # which ear the buzz goes to right now
 
 def ear_for(turn):
     """turn: -1 = threat on the image's left ... +1 = right (from the laptop)."""
@@ -59,31 +66,31 @@ def ear_for(turn):
         return {"left": "right", "right": "left"}[image_side]
     return image_side
 
-def beeper():
-    """Background thread: beep over and over while the alarm is set."""
+def buzzer():
+    """Background thread: buzz over and over while the alarm is set."""
     reported = False
     while True:
         alarm.wait()
         if play:
             result = subprocess.run(play[ear], stderr=subprocess.PIPE, text=True)
             if result.returncode != 0:
-                if not reported:   # say it once, not on every beep
+                if not reported:   # say it once, not on every buzz
                     print(f"audio failed: {result.stderr.strip()}\n"
                           "  check the headset with  aplay -l  and set AUDIO_DEVICE in config.py")
                     reported = True
-                time.sleep(BEEP_S)   # failed plays return instantly; keep the beep rhythm
+                time.sleep(BUZZ_S)   # failed plays return instantly; keep the buzz rhythm
         else:
-            print(f"BEEP ({ear})")
+            print(f"BUZZ ({ear})")
         time.sleep(GAP_S)
 
-threading.Thread(target=beeper, daemon=True).start()
+threading.Thread(target=buzzer, daemon=True).start()
 
 def warning(on):
     print(f"WARN ON ({ear} ear)" if on else "warn off")
     alarm.set() if on else alarm.clear()
 
 if "--test" in sys.argv:
-    for ear in EARS:   # the beeper thread reads the global ear
+    for ear in EARS:   # the buzzer thread reads the global ear
         warning(True)
         time.sleep(1.0)
         warning(False)
