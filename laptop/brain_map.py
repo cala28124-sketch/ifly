@@ -3,12 +3,14 @@
 About 20% of the brain spikes in every chunk just from background activity, so drawing every spike
 would hide the signal. Instead each neuron compares its recent firing with its long-run normal, and
 only neurons firing well above normal for several chunks in a row glow (orange). The escape circuit is always highlighted:
-LPLC2/LC4 in yellow when they spike, and the two giant fibers (DNp01) as red dots when they fire.
+LPLC2/LC4 in yellow when they spike, and the two giant fibers (DNp01) as orange dots when they spike,
+red when they spike enough to escape.
 Positions come from flybrain's data (about 140,000 of the 166,700 neurons have one).
 """
 import pathlib
 import cv2
 import numpy as np
+from laptop.brain import ESCAPE_SPIKES
 
 WIDTH = 700                  # window width in pixels (height follows the brain's shape)
 RECENT = 0.5                 # how fast each neuron's recent firing follows its activity, per chunk
@@ -33,6 +35,7 @@ class BrainMap:
         cell_type = meta["cell_type"][self.has_pos]
         self.looming = np.isin(cell_type, ["LPLC2", "LC4"])
         self.giant_fiber = np.flatnonzero(cell_type == "DNp01")
+        self.giant_fiber_side = meta["side"][self.has_pos][self.giant_fiber]   # "L" / "R"
         self.recent = self.normal = None   # set from the first chunk
         self.base = np.zeros((self.height, WIDTH, 3), np.uint8)
         self.base[self.py, self.px] = (70, 70, 70)   # every positioned neuron, dim gray
@@ -42,8 +45,9 @@ class BrainMap:
         cv2.putText(self.base, "LEFT", (10, self.height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
         cv2.putText(self.base, "RIGHT", (WIDTH - 60, self.height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
-    def draw(self, spiked):
-        """spiked: indices of every neuron that fired this chunk. Returns the image."""
+    def draw(self, spiked, giant_fiber_spikes=(0, 0)):
+        """spiked: indices of every neuron that fired this chunk; giant_fiber_spikes: DNp01 spike counts
+        this chunk, [left, right]. Returns the image."""
         slots = self.slot[np.asarray(spiked, int)]
         now = np.zeros(len(self.px), np.float32)
         now[slots[slots >= 0]] = 1
@@ -59,7 +63,9 @@ class BrainMap:
         hot = (now > 0) & self.looming
         for i in np.flatnonzero(hot):
             cv2.circle(img, (self.px[i], self.py[i]), 2, (0, 255, 255), -1)   # yellow: LPLC2 / LC4 spiking
-        for i in self.giant_fiber:
-            if now[i]:
-                cv2.circle(img, (self.px[i], self.py[i]), 7, (0, 0, 255), -1)   # red: giant fiber fired
+        for i, side in zip(self.giant_fiber, self.giant_fiber_side):
+            if now[i]:   # orange: giant fiber spiked; red: spiked enough to escape
+                count = giant_fiber_spikes["LR".index(side)] if side in ("L", "R") else 1
+                color = (0, 0, 255) if count >= ESCAPE_SPIKES else (0, 165, 255)
+                cv2.circle(img, (self.px[i], self.py[i]), 7, color, -1)
         return img

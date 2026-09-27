@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from laptop.brain import ESCAPE_SPIKES
 
 BAR_FULL = {"LC4": 200, "LPLC2": 400}   # spikes per chunk that fill a bar (strong looming)
 
@@ -22,13 +23,16 @@ def circuit_panel(thought, height):
             cv2.rectangle(panel, (x, y), (x + 90, y + 20), (80, 80, 80), 1)
             cv2.rectangle(panel, (x, y), (x + fill, y + 20), (0, 200, 255), -1)
             cv2.putText(panel, str(count), (x, y + 38), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
-    y = 250   # giant fiber: one neuron per side, lit when it spiked this chunk
+    y = 250   # giant fiber: one neuron per side; orange = spiked, red = spiked enough to escape
     cv2.putText(panel, "DNp01", (10, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
     for col, count in enumerate(activity["DNp01"]):
         center = (125 + col * 110, y)
-        cv2.circle(panel, center, 16, (0, 0, 255) if count else (80, 80, 80), -1 if count else 2)
+        color = (0, 0, 255) if count >= ESCAPE_SPIKES else (0, 165, 255) if count else (80, 80, 80)
+        cv2.circle(panel, center, 16, color, -1 if count else 2)
         if count:
             cv2.putText(panel, str(count), (center[0] - 6, center[1] + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+    cv2.putText(panel, "orange = spike", (80, y + 36), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 165, 255), 1)
+    cv2.putText(panel, f"red = escape ({ESCAPE_SPIKES}+)", (175, y + 36), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
     if thought["escape"]:
         cv2.putText(panel, "ESCAPE", (90, 320), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
     return panel
@@ -61,5 +65,5 @@ def show(frame, seen, thought, vehicles=None):
         if brain_map is None:
             from laptop.brain_map import BrainMap
             brain_map = BrainMap()
-        cv2.imshow("fly brain map", brain_map.draw(thought["spiked"]))
+        cv2.imshow("fly brain map", brain_map.draw(thought["spiked"], thought["activity"]["DNp01"]))
     return cv2.waitKey(1) == 27   # True when Esc is pressed
