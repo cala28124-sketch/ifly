@@ -16,6 +16,12 @@ LOOM_SCALE = 0.3    # outward-motion strength that counts as full looming (score
 ADAPT = 0.2         # how fast each cell's baseline follows its activity, per chunk (static scenes fade out)
 RADII = (20, 40, 70)  # LPLC2-like receptive field radii in pixels (small, medium, large objects)
 GATE_EPS = 0.02     # brightness change (0-1 scale) below which a column counts as unchanged
+# Turning: when the whole view slides one way (the camera turning), looming is turned down, like the fly's
+# own suppression of motion vision during its turns. Net sweep = how coherently x how fast the view moves;
+# on Waymo footage > 0.06 flagged 85% of sharp-turn moments, 1% of straight driving, 0% of real approaches.
+TURN_SWEEP = 0.06   # net sweep above which the camera counts as turning
+TURN_SUPPRESS = 0.7 # fraction of looming removed while turning (0.3 is kept so a very strong threat still counts)
+TURN_HOLD = 0.4     # seconds suppression lasts after the view stops sweeping (covers the turn's edges)
 TUNING_DIR = pathlib.Path(__file__).resolve().parent.parent / "tools" / "tuning"
 
 def load_tuning(model):
@@ -38,7 +44,8 @@ class FlyEyes:
         self.tuning = load_tuning(model)             # fail fast, before the slow network load
         self.net = NetworkView(model).init_network()
         self.eye = BoxEye()                          # image -> 721 hexagonal eye columns
-        self.dt = dt
+        self.dt, self.fps = dt, fps
+        self.clock, self.turn_until = 0.0, -1.0   # seconds of footage seen, end of the current suppression
         self.steps = max(1, round(1 / (fps * dt)))   # each frame lasts 1/fps: 3 steps at 30 fps, 10 at 10 fps
         self.state = None                            # set from the first frame, then carried
         self.size = None
@@ -121,10 +128,20 @@ class FlyEyes:
             angle = np.radians([t["image_deg"] for t in tune])
             weight = np.array([t["dsi"] for t in tune])
             flow += np.stack([(weight * np.cos(angle)) @ m, (weight * np.sin(angle)) @ m])
+        # how much the whole view slides one way at once (0 = no common direction, 1 = everything together)
+        speed = np.hypot(*flow)
+        self.sweep = float(np.hypot(*flow.mean(1)) / (speed.mean() + 1e-9))
+        self.motion = float(speed.mean())
+        self.clock += len(frames) / self.fps
+        if self.sweep * self.motion > TURN_SWEEP:
+            self.turn_until = self.clock + TURN_HOLD
+        turning = self.clock <= self.turn_until
+        keep = 1 - TURN_SUPPRESS if turning else 1.0
         # like LPLC2: outward motion in each quadrant around a centre; a unit needs all four
         self.arm_out = np.einsum("uqkh,kh->qu", self.arms, flow)               # (4 quadrants, units)
         outward = self.arm_out.min(0)
-        loom = lambda side: float(np.clip(outward[side].max() / LOOM_SCALE, 0, 1))
+        loom = lambda side: float(np.clip(outward[side].max() / LOOM_SCALE * keep, 0, 1))
         return {"t4": [float(response[self.cells[d][0]].mean()) for d in "abcd"],
                 "loom_left": loom(self.unit_left),
-                "loom_right": loom(~self.unit_left)}
+                "loom_right": loom(~self.unit_left),
+                "turning": turning}

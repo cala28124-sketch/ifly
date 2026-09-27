@@ -56,6 +56,8 @@ def show(frame, seen, thought, vehicles=None):
         draw_vehicles(img, vehicles)
     cv2.putText(img, f"loom L {seen['loom_left']:.2f}  R {seen['loom_right']:.2f}",
                 (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    if seen.get("turning"):   # looming turned down while the view sweeps (see TURN_SUPPRESS in eyes.py)
+        cv2.putText(img, "TURNING: looming reduced", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
     if thought["escape"]:
         cv2.putText(img, "WARN: " + " > ".join(thought["fired"]),
                     (10, 460), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)

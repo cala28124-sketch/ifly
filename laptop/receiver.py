@@ -51,7 +51,7 @@ log = None
 if args.log:   # one row per decision; the frame's name is the Pi's hostname live, or the Waymo timestamp
     log_file = open(args.log, "w", newline="")
     log = csv.writer(log_file)
-    log.writerow(["frame", "loom_left", "loom_right", "escape", "turn", "fired", "vehicles"])
+    log.writerow(["frame", "loom_left", "loom_right", "escape", "turn", "fired", "vehicles", "turning"])
 
 while True:
     name, jpg = hub.recv_jpg()
@@ -74,7 +74,8 @@ while True:
     if log:
         log.writerow([name, f"{seen['loom_left']:.3f}", f"{seen['loom_right']:.3f}", int(thought["escape"]),
                       f"{turn:.2f}", " > ".join(thought["fired"]),
-                      ";".join(f"{v['type']}:{v['confidence']:.2f}" for v in vehicles or [])])
+                      ";".join(f"{v['type']}:{v['confidence']:.2f}" for v in vehicles or []),
+                      int(seen.get("turning", False))])
         log_file.flush()   # so the file is complete even if the receiver is stopped with Ctrl+C
     if show(frame, seen, thought, vehicles):
         break
