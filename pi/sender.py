@@ -1,5 +1,5 @@
 import cv2, imagezmq, socket
-from config import LAPTOP_IP, FRAME_PORT, FRAME_SIZE
+from config import LAPTOP_IP, FRAME_PORT, COLOR_SIZE
 
 sender = imagezmq.ImageSender(connect_to=f"tcp://{LAPTOP_IP}:{FRAME_PORT}")
 cap = cv2.VideoCapture(0)
@@ -11,6 +11,6 @@ while True:
     ok, frame = cap.read()
     if not ok:
         continue
-    gray = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), FRAME_SIZE)
-    ok, jpg = cv2.imencode(".jpg", gray, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    small = cv2.resize(frame, COLOR_SIZE)   # stays in color; the laptop makes the gray copy for the eyes
+    ok, jpg = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 80])
     sender.send_jpg(name, jpg)
