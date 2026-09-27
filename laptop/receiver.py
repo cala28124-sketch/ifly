@@ -3,7 +3,7 @@
 # boxes are only shown in the viewer and don't affect the warning.
 import cv2, zmq, imagezmq, numpy as np
 from config import (FRAME_PORT, COMMAND_PORT, CHUNK, FAKE_EYES, EYES_MODEL, FAKE_BRAIN, FRAME_SIZE, EYES_ZOOM,
-                    VEHICLE_CHECK)
+                    VEHICLE_CHECK, CAMERA_FPS)
 from laptop.eyes import FlyEyes
 from laptop.brain import FlyBrainModel
 from laptop.viewer import show
@@ -34,7 +34,9 @@ def threat_side(seen, thought):
     left, right = thought.get("activity", {}).get("DNp01", (seen["loom_left"], seen["loom_right"]))
     return 0.0 if left + right == 0 else (right - left) / (right + left)
 
-eyes, brain, chunk = FlyEyes(fake=FAKE_EYES, model=EYES_MODEL), FlyBrainModel(fake=FAKE_BRAIN), []
+eyes = FlyEyes(fake=FAKE_EYES, model=EYES_MODEL, fps=CAMERA_FPS)
+brain = FlyBrainModel(fake=FAKE_BRAIN, fps=CAMERA_FPS, chunk=CHUNK)
+chunk = []
 
 while True:
     _, jpg = hub.recv_jpg()

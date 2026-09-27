@@ -26,7 +26,7 @@ def load_tuning(model):
     return json.loads(path.read_text())
 
 class FlyEyes:
-    def __init__(self, fake=True, model="flow/0000/000", steps_per_frame=3, dt=1/100):
+    def __init__(self, fake=True, model="flow/0000/000", fps=30, dt=1/100):
         self.fake = fake
         if fake:
             return
@@ -38,7 +38,8 @@ class FlyEyes:
         self.tuning = load_tuning(model)             # fail fast, before the slow network load
         self.net = NetworkView(model).init_network()
         self.eye = BoxEye()                          # image -> 721 hexagonal eye columns
-        self.dt, self.steps = dt, steps_per_frame    # 3 steps of 10 ms ~ one 30 fps frame
+        self.dt = dt
+        self.steps = max(1, round(1 / (fps * dt)))   # each frame lasts 1/fps: 3 steps at 30 fps, 10 at 10 fps
         self.state = None                            # set from the first frame, then carried
         self.size = None
 

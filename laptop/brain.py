@@ -11,21 +11,22 @@ Fly neurons used here (all present in the connectome, on the left and right side
 """
 from config import CHUNK, WARN_THRESHOLD
 
-CAMERA_FPS = 30          # frames per second the chunks come from (sets brain time per chunk)
 VOLTAGE_AT_THRESHOLD = 0.15   # LPLC2/LC4 drive per 20 ms step that reliably fires DNp01 twice in a chunk
 MAX_VOLTAGE = 0.8        # most drive per step (flybrain's own cap)
 ESCAPE_SPIKES = 2        # giant-fiber spikes in one chunk that count as escape (1 also happens at rest)
 CHAIN = ["LC4", "LPLC2", "DNp01"]   # looming detectors -> giant fiber, reported when they spike
 
 class FlyBrainModel:
-    def __init__(self, fake=True):
+    def __init__(self, fake=True, fps=30, chunk=CHUNK):
+        """fps and chunk: the frame rate and chunk size the loom scores come from; each chunk is
+        simulated for chunk / fps seconds of brain time."""
         self.fake = fake
         if fake:
             return
         # real version: the MaleCNS whole-brain spiking model (166,700 neurons, ~3 ms per 20 ms step on CPU)
         from flybrain import FlyBrain
         self.brain = FlyBrain(device="auto")
-        self.steps = max(1, round(CHUNK / CAMERA_FPS / self.brain.dt))   # 5 frames at 30 fps -> 8 steps
+        self.steps = max(1, round(chunk / fps / self.brain.dt))   # 5 frames at 30 fps -> 8 steps
         self.loom_cells = {s: [*self.brain.cells(["LPLC2"], s), *self.brain.cells(["LC4"], s)] for s in "LR"}
         self.chain = {name: set(self.brain.cells([name]).tolist()) for name in CHAIN}
         self.chain_sides = {(name, s): set(self.brain.cells([name], s).tolist()) for name in CHAIN for s in "LR"}
