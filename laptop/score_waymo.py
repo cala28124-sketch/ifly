@@ -137,10 +137,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Score the fly's warnings against Waymo's labeled vehicles.")
     parser.add_argument("segments", nargs="*", help="segment names (default: every one with a log and labels)")
     args = parser.parse_args()
-    segments = args.segments or sorted(p.stem for p in RESULTS.glob("*.csv")
-                                       if pathlib.Path(f"waymo/camera_box/{p.stem}.parquet").exists())
+    has_labels = lambda seg: any(pathlib.Path(f"waymo/{kind}/{seg}.parquet").exists() for kind in ("lidar_box", "camera_box"))
+    segments = args.segments or sorted(p.stem for p in RESULTS.glob("*.csv") if has_labels(p.stem))
     if not segments:
-        raise SystemExit("nothing to score: need waymo/results/SEGMENT.csv and waymo/camera_box/SEGMENT.parquet")
+        raise SystemExit("nothing to score: need waymo/results/SEGMENT.csv and waymo/lidar_box (or camera_box)/SEGMENT.parquet")
     results = [score(s) for s in segments]
     for r in results:
         report(r)
