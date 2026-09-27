@@ -35,8 +35,21 @@ def circuit_panel(thought, height):
 
 brain_map = None   # created on first use, only when the real brain is running
 
-def show(frame, seen, thought):
+def draw_vehicles(img, vehicles):
+    """Green boxes for detected vehicles (view_box is in the eyes' 160x120 view; img is 4x larger)."""
+    scale = img.shape[1] / 160
+    for v in vehicles:
+        x1, y1, x2, y2 = (int(c * scale) for c in v["view_box"])
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 220, 0), 2)
+        cv2.putText(img, f"{v['type']} {v['confidence']:.2f}", (max(x1, 0), max(y1 - 6, 50)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 0), 2)
+    cv2.putText(img, f"vehicles: {len(vehicles)}", (img.shape[1] - 170, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                0.8, (0, 220, 0), 2)
+
+def show(frame, seen, thought, vehicles=None):
     img = cv2.cvtColor(cv2.resize(frame, (640, 480)), cv2.COLOR_GRAY2BGR)
+    if vehicles is not None:
+        draw_vehicles(img, vehicles)
     cv2.putText(img, f"loom L {seen['loom_left']:.2f}  R {seen['loom_right']:.2f}",
                 (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
     if thought["escape"]:

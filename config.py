@@ -9,6 +9,7 @@ CHUNK = 5                   # frames per eye-model step; smaller = less lag
 WARN_THRESHOLD = 0.4        # loom level where the fly escapes; 0.4 gave earlier warnings with no extra false alarms (synthetic test)
 FAKE_EYES = False           # True = frame-difference stand-in; False = flyvis fly eyes
 EYES_MODEL = "flow/0000/000"  # flyvis ensemble model; needs tools/tuning/<model>.json
+VEHICLE_CHECK = True        # YOLO vehicle detector on the color frames (needs ultralytics); shown, doesn't affect warnings
 FAKE_BRAIN = False          # True = "loom > WARN_THRESHOLD" stand-in; False = flybrain whole-brain model
 WARN_HOLD = 0.5             # seconds the warning keeps beeping after the last escape command
 AUDIO_DEVICE = "plughw:CARD=G,DEV=0"  # Corsair USB headset on the Pi (aplay -l); None = system default
