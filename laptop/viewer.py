@@ -23,11 +23,11 @@ def circuit_panel(thought, height):
             cv2.rectangle(panel, (x, y), (x + 90, y + 20), (80, 80, 80), 1)
             cv2.rectangle(panel, (x, y), (x + fill, y + 20), (0, 200, 255), -1)
             cv2.putText(panel, str(count), (x, y + 38), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
-    y = 250   # giant fiber: one neuron per side; orange = spiked, red = spiked enough to escape
+    y = 250   # giant fiber: one neuron per side; orange = spiked, red = part of an escape (both sides' spikes count)
     cv2.putText(panel, "DNp01", (10, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
     for col, count in enumerate(activity["DNp01"]):
         center = (125 + col * 110, y)
-        color = (0, 0, 255) if count >= ESCAPE_SPIKES else (0, 165, 255) if count else (80, 80, 80)
+        color = (0, 0, 255) if count and thought["escape"] else (0, 165, 255) if count else (80, 80, 80)
         cv2.circle(panel, center, 16, color, -1 if count else 2)
         if count:
             cv2.putText(panel, str(count), (center[0] - 6, center[1] + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
@@ -50,10 +50,13 @@ def draw_vehicles(img, vehicles):
     cv2.putText(img, f"vehicles: {len(vehicles)}", (img.shape[1] - 170, 30), cv2.FONT_HERSHEY_SIMPLEX,
                 0.8, (0, 220, 0), 2)
 
-def show(frame, seen, thought, vehicles=None):
+def camera_view(frame, seen, thought, vehicles=None):
+    """The eyes' 160x120 view, enlarged, with loom scores, vehicle boxes and the warning drawn on."""
     img = cv2.cvtColor(cv2.resize(frame, (640, 480)), cv2.COLOR_GRAY2BGR)
     if vehicles is not None:
         draw_vehicles(img, vehicles)
+    img[:70] //= 3                    # darken the top and bottom strips so the text stays readable on bright sky
+    img[430:] //= 3
     cv2.putText(img, f"loom L {seen['loom_left']:.2f}  R {seen['loom_right']:.2f}",
                 (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
     if seen.get("turning"):   # looming turned down while the view sweeps (see TURN_SUPPRESS in eyes.py)
@@ -61,11 +64,34 @@ def show(frame, seen, thought, vehicles=None):
     if thought["escape"]:
         cv2.putText(img, "WARN: " + " > ".join(thought["fired"]),
                     (10, 460), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
-    cv2.imshow("fly brain", np.hstack([img, circuit_panel(thought, img.shape[0])]))
+    return img
+
+def compose(frame, seen, thought, vehicles=None):
+    """Everything to show for one decision: camera view, circuit panel and (real brain only) brain map.
+    Call once per decision: the brain map keeps a running memory of each neuron's firing."""
+    view = {"camera": camera_view(frame, seen, thought, vehicles), "panel": circuit_panel(thought, 480), "map": None}
     if "spiked" in thought:
         global brain_map
         if brain_map is None:
             from laptop.brain_map import BrainMap
             brain_map = BrainMap()
-        cv2.imshow("fly brain map", brain_map.draw(thought["spiked"], thought["activity"]["DNp01"]))
-    return cv2.waitKey(1) == 27   # True when Esc is pressed
+        view["map"] = brain_map.draw(thought["spiked"], thought["escape"])
+    return view
+
+def display(view):
+    """Show a composed view in its windows; True when Esc is pressed."""
+    cv2.imshow("fly brain", np.hstack([view["camera"], view["panel"]]))
+    if view["map"] is not None:
+        cv2.imshow("fly brain map", view["map"])
+    return cv2.waitKey(1) == 27
+
+def recording_frame(view):
+    """One video frame: camera view + circuit panel + brain map (scaled to the same height), side by side."""
+    parts = [view["camera"], view["panel"]]
+    if view["map"] is not None:
+        h, w = view["map"].shape[:2]
+        parts.append(cv2.resize(view["map"], (int(w * 480 / h), 480)))
+    return np.hstack(parts)
+
+def show(frame, seen, thought, vehicles=None):
+    return display(compose(frame, seen, thought, vehicles))

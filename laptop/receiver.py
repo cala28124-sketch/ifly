@@ -5,12 +5,14 @@
 # Live:   python -m laptop.receiver
 # Waymo:  python -m laptop.receiver --fps 10 --chunk 2 --log waymo/results/SEGMENT.csv
 #         (then feed it with: python -m laptop.waymo_sender SEGMENT)
+# Demo video: add --record demo.mp4 (camera view + circuit panel + brain map, every frame, real speed);
+#         --no-window records or logs without opening windows.
 import argparse, csv, cv2, zmq, imagezmq, numpy as np
 from config import (FRAME_PORT, COMMAND_PORT, CHUNK, FAKE_EYES, EYES_MODEL, FAKE_BRAIN, FRAME_SIZE, EYES_ZOOM,
                     VEHICLE_CHECK, CAMERA_FPS)
 from laptop.eyes import FlyEyes
 from laptop.brain import FlyBrainModel
-from laptop.viewer import show
+from laptop.viewer import camera_view, compose, display, recording_frame
 if VEHICLE_CHECK:
     from vehicle.detector import detect_vehicles
 
@@ -18,6 +20,8 @@ parser = argparse.ArgumentParser(description="Laptop side: frames in, fly eyes +
 parser.add_argument("--fps", type=float, default=CAMERA_FPS, help="frame rate of the incoming frames (Waymo: 10)")
 parser.add_argument("--chunk", type=int, default=CHUNK, help="frames per decision (Waymo: 2, about 0.2 s)")
 parser.add_argument("--log", help="write every decision to this CSV file (for scoring)")
+parser.add_argument("--record", help="save a video of the camera view, circuit panel and brain map (.mp4)")
+parser.add_argument("--no-window", action="store_true", help="don't open windows (recording / scoring only)")
 args = parser.parse_args()
 
 hub = imagezmq.ImageHub(open_port=f"tcp://*:{FRAME_PORT}")
@@ -53,29 +57,61 @@ if args.log:   # one row per decision; the frame's name is the Pi's hostname liv
     log = csv.writer(log_file)
     log.writerow(["frame", "loom_left", "loom_right", "escape", "turn", "fired", "vehicles", "turning"])
 
-while True:
-    name, jpg = hub.recv_jpg()
-    hub.send_reply(b"OK")
-    color = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
-    frame = cv2.resize(zoom_center(cv2.cvtColor(color, cv2.COLOR_BGR2GRAY), EYES_ZOOM), FRAME_SIZE)   # gray 160x120 for the eyes
-    chunk.append(frame)
-    if len(chunk) < args.chunk:
-        continue
-    seen = eyes.step(chunk)
-    chunk = []
-    thought = brain.step(seen["loom_left"], seen["loom_right"])
-    turn = threat_side(seen, thought)
-    pub.send_json({"turn": turn, "escape": thought["escape"]})
-    vehicles = None
-    if VEHICLE_CHECK:   # once per chunk (~30 ms), on the full color frame
-        vehicles = detect_vehicles(color)[1]
-        for v in vehicles:
-            v["view_box"] = to_eye_view(v["box"], color.shape, EYES_ZOOM)
+video, last = None, None   # the video writer, and the latest decision's (seen, thought, vehicles, view)
+
+def record(frame):
+    """Write this frame to the video with the latest decision's overlays, panel and brain map."""
+    global video
+    seen, thought, vehicles, view = last
+    picture = recording_frame(dict(view, camera=camera_view(frame, seen, thought, vehicles)))
+    if video is None:
+        h, w = picture.shape[:2]
+        for codec in ("avc1", "mp4v"):   # H.264 plays everywhere; mp4v is the fallback
+            video = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc(*codec), args.fps, (w, h))
+            if video.isOpened():
+                break
+    video.write(picture)
+
+try:
+    while True:
+        name, jpg = hub.recv_jpg()
+        hub.send_reply(b"OK")
+        if name == "__end__":   # waymo_sender's end-of-clip signal (the Pi never sends it)
+            break
+        color = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
+        frame = cv2.resize(zoom_center(cv2.cvtColor(color, cv2.COLOR_BGR2GRAY), EYES_ZOOM), FRAME_SIZE)   # gray 160x120 for the eyes
+        chunk.append(frame)
+        if len(chunk) < args.chunk:
+            if args.record and last:
+                record(frame)
+            continue
+        seen = eyes.step(chunk)
+        chunk = []
+        thought = brain.step(seen["loom_left"], seen["loom_right"])
+        turn = threat_side(seen, thought)
+        pub.send_json({"turn": turn, "escape": thought["escape"]})
+        vehicles = None
+        if VEHICLE_CHECK:   # once per chunk (~30 ms), on the full color frame
+            vehicles = detect_vehicles(color)[1]
+            for v in vehicles:
+                v["view_box"] = to_eye_view(v["box"], color.shape, EYES_ZOOM)
+        if log:
+            log.writerow([name, f"{seen['loom_left']:.3f}", f"{seen['loom_right']:.3f}", int(thought["escape"]),
+                          f"{turn:.2f}", " > ".join(thought["fired"]),
+                          ";".join(f"{v['type']}:{v['confidence']:.2f}" for v in vehicles or []),
+                          int(seen.get("turning", False))])
+            log_file.flush()   # so the file is complete even if the receiver is stopped with Ctrl+C
+        view = compose(frame, seen, thought, vehicles)   # once per decision (the brain map keeps a memory)
+        last = (seen, thought, vehicles, view)
+        if args.record:
+            record(frame)
+        if not args.no_window and display(view):
+            break
+except KeyboardInterrupt:
+    pass
+finally:   # close the files properly so the video plays and the log is complete
+    if video is not None:
+        video.release()
+        print(f"saved {args.record}")
     if log:
-        log.writerow([name, f"{seen['loom_left']:.3f}", f"{seen['loom_right']:.3f}", int(thought["escape"]),
-                      f"{turn:.2f}", " > ".join(thought["fired"]),
-                      ";".join(f"{v['type']}:{v['confidence']:.2f}" for v in vehicles or []),
-                      int(seen.get("turning", False))])
-        log_file.flush()   # so the file is complete even if the receiver is stopped with Ctrl+C
-    if show(frame, seen, thought, vehicles):
-        break
+        log_file.close()

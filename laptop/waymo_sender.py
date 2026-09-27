@@ -27,4 +27,5 @@ for timestamp, frame in load_segment_frames(args.segment):
     ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])   # same quality as the Pi
     sender.send_jpg(str(timestamp), jpg)   # waits until the receiver has taken it
     sent += 1
+sender.send_jpg("__end__", jpg)   # tells the receiver the clip is over, so it closes its video/log cleanly
 print(f"sent {sent} frames ({sent / WAYMO_FPS:.1f} s of driving) in {time.time() - start:.1f} s")
