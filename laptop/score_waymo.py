@@ -10,7 +10,8 @@ within TTC_MAX s is sorted by where it is now (reliable; projecting sideways dri
   collision course - clearly in the car's path (overlapping it by IN_PATH m): what the fly is built to catch,
                      the main score
   close pass       - otherwise within PASS_MARGIN m of its side: reported separately; not yet targeted
-Motion comes from each vehicle's position relative to the car over time. Without 3D labels, Davis's
+Motion comes from each vehicle's position relative to the car over time; while the car turns sharply,
+nothing is marked (the prediction assumes it drives straight). Without 3D labels, Davis's
 compute_ground_truth (a labeled 2D box growing fast, see GT_GROWTH) is used for everything; it also
 counts parked cars the Waymo car drives past. Consecutive threat frames form one event, which ends when
 the vehicle is closest.
@@ -39,6 +40,8 @@ EGO_FRONT = 3.0      # metres from the label origin to the Waymo car's front (ap
 EGO_HALF_WIDTH = 1.0 # half the Waymo car's width, metres
 HALF_FOV = 25        # degrees each side of straight ahead that the front camera sees
 MIN_CLOSING = 0.5    # m/s: slower than this isn't approaching
+TURN_LIMIT = 5.0     # deg/s: while the car turns faster than this, no threats are marked (the prediction assumes it
+                     # drives straight, so mid-turn, cars at the corner look like they're in its path)
 EARLY = 3.0        # seconds before an event's start that a warning still counts for it
 LATE = 1.0         # seconds after an event's end during which warnings aren't false alarms
 MERGE_GAP = 0.5    # approaching frames less than this far apart belong to the same event
@@ -50,9 +53,10 @@ def seconds(timestamp_micros):
 def lidar_ground_truth(segment):
     """{"collision": {timestamp: bool}, "close": {timestamp: bool}} from the 3D labels (see the top).
     Motion comes from each vehicle's position change relative to the car over 0.2 s, so it already
-    includes the Waymo car's own movement."""
+    includes the Waymo car's own movement. Nothing is marked while the car turns sharply (TURN_LIMIT)."""
     df = pd.read_parquet(f"waymo/lidar_box/{segment}.parquet")
     col = lambda name: f"[LiDARBoxComponent].{name}"
+    turning = {ts for ts, rate in car_turn_rate(df).items() if abs(math.degrees(rate)) > TURN_LIMIT}
     kinds = {"collision": set(), "close": set()}
     for _, track in df[df[col("type")] == VEHICLE_TYPE].groupby("key.laser_object_id"):
         track = track.sort_values("key.frame_timestamp_micros")
@@ -61,7 +65,7 @@ def lidar_ground_truth(segment):
         length, width = track[col("box.size.x")].to_numpy(), track[col("box.size.y")].to_numpy()
         for i in range(2, len(ts)):
             dt = (ts[i] - ts[i - 2]) / 1e6
-            if not 0 < dt <= 0.5:   # the vehicle wasn't tracked continuously
+            if not 0 < dt <= 0.5 or ts[i] in turning:   # not tracked continuously, or the car is mid-turn
                 continue
             vx, vy = (x[i] - x[i - 2]) / dt, (y[i] - y[i - 2]) / dt
             gap = x[i] - length[i] / 2 - EGO_FRONT
@@ -74,6 +78,17 @@ def lidar_ground_truth(segment):
                 kinds["collision" if side_gap <= -IN_PATH else "close"].add(ts[i])
     frames = df["key.frame_timestamp_micros"].unique()
     return {kind: {ts: ts in found for ts in frames} for kind, found in kinds.items()}
+
+def car_turn_rate(df):
+    """{timestamp: the Waymo car's turn rate in rad/s (+ = left)}. When the car turns, every labeled object's
+    heading rotates the other way by the same amount, so the median heading change measures it."""
+    heading = df.pivot_table(index="key.frame_timestamp_micros", columns="key.laser_object_id",
+                             values="[LiDARBoxComponent].box.heading")
+    change = heading.diff()
+    change = (change + math.pi) % (2 * math.pi) - math.pi                    # wrap to -pi..pi
+    seconds_between = pd.Series(heading.index, index=heading.index).diff() / 1e6
+    rate = (-change.median(axis=1) / seconds_between).fillna(0.0)
+    return rate.rolling(3, center=True, min_periods=1).median().to_dict()   # smooth out label jitter
 
 def ground_truth(segment):
     """The 3D ground truth when the segment has 3D labels, otherwise Davis's 2D box-growth version
